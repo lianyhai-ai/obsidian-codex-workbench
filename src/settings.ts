@@ -7,6 +7,7 @@ export const DEFAULT_SETTINGS: CodexWorkbenchSettings = {
   codexCliPath: "/usr/local/bin/codex",
   codexSandboxMode: "workspace-write",
   codexApprovalMode: "on-request",
+  projectContextPaths: "",
   endpointUrl: "",
   apiKey: "",
   model: "gpt-5.4",
@@ -88,6 +89,19 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
           .setValue(this.plugin.settings.codexApprovalMode)
           .onChange(async (value) => {
             this.plugin.settings.codexApprovalMode = value as CodexWorkbenchSettings["codexApprovalMode"];
+            await this.plugin.saveSettings();
+          }),
+      );
+
+    new Setting(containerEl)
+      .setName("Project context directories")
+      .setDesc("One directory per line. These paths are injected into each Codex turn as the baseline engineering context.")
+      .addTextArea((text) =>
+        text
+          .setPlaceholder("/Users/you/project-a\n/Users/you/project-b")
+          .setValue(this.plugin.settings.projectContextPaths)
+          .onChange(async (value) => {
+            this.plugin.settings.projectContextPaths = value;
             await this.plugin.saveSettings();
           }),
       );

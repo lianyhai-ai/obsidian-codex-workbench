@@ -34,6 +34,7 @@ export interface CodexWorkbenchSettings {
   codexCliPath: string;
   codexSandboxMode: "read-only" | "workspace-write";
   codexApprovalMode: "never" | "on-request" | "untrusted";
+  projectContextPaths: string;
   endpointUrl: string;
   apiKey: string;
   model: string;

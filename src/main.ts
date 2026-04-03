@@ -29,6 +29,7 @@ const DEFAULT_SELECTION_PROMPT = "Explain, critique, or improve this selection."
 interface CodexWorkbenchPluginData {
   settings?: Partial<CodexWorkbenchSettings>;
   localCodexThreadId?: string | null;
+  composerDraft?: string | null;
 }
 
 export default class CodexWorkbenchPlugin extends Plugin {
@@ -37,11 +38,13 @@ export default class CodexWorkbenchPlugin extends Plugin {
   pendingContext: CodexContext | null = null;
   lastAssistantReply = "";
   isBusy = false;
+  composerDraft = "";
 
   private localCodexClient = new LocalCodexAppServerClient();
   private selectionToolbar?: SelectionToolbarController;
   private localCodexThreadId: string | null = null;
   private restorePromise: Promise<void> | null = null;
+  private draftSaveHandle: number | null = null;
 
   async onload(): Promise<void> {
     await this.loadPluginData();
@@ -76,14 +79,21 @@ export default class CodexWorkbenchPlugin extends Plugin {
 
     if (this.settings.autoOpenView) {
       this.app.workspace.onLayoutReady(() => {
-        void this.activateView();
+        if (this.app.workspace.getLeavesOfType(VIEW_TYPE_CODEX_WORKBENCH).length === 0) {
+          void this.activateView();
+        }
       });
     }
   }
 
   async onunload(): Promise<void> {
+    if (this.draftSaveHandle !== null) {
+      window.clearTimeout(this.draftSaveHandle);
+      this.draftSaveHandle = null;
+    }
+
+    await this.savePluginData();
     await this.localCodexClient.dispose();
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_CODEX_WORKBENCH);
   }
 
   async loadPluginData(): Promise<void> {
@@ -97,6 +107,9 @@ export default class CodexWorkbenchPlugin extends Plugin {
     this.localCodexThreadId = hasNestedSettings
       ? (rawData as CodexWorkbenchPluginData).localCodexThreadId ?? null
       : null;
+    this.composerDraft = hasNestedSettings
+      ? (rawData as CodexWorkbenchPluginData).composerDraft ?? ""
+      : "";
   }
 
   async saveSettings(): Promise<void> {
@@ -108,6 +121,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
     const payload: CodexWorkbenchPluginData = {
       settings: this.settings,
       localCodexThreadId: this.localCodexThreadId,
+      composerDraft: this.composerDraft,
     };
 
     await this.saveData(payload);
@@ -128,6 +142,18 @@ export default class CodexWorkbenchPlugin extends Plugin {
   }
 
   async activateView(): Promise<void> {
+    const existingLeaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_CODEX_WORKBENCH)[0];
+    if (existingLeaf) {
+      await existingLeaf.setViewState({
+        type: VIEW_TYPE_CODEX_WORKBENCH,
+        active: true,
+      });
+
+      this.app.workspace.revealLeaf(existingLeaf);
+      this.refreshViews();
+      return;
+    }
+
     const leaf = this.app.workspace.getRightLeaf(false);
     if (!leaf) {
       new Notice("Could not open the right sidebar leaf.");
@@ -146,6 +172,22 @@ export default class CodexWorkbenchPlugin extends Plugin {
   clearPendingContext(): void {
     this.pendingContext = null;
     this.refreshViews();
+  }
+
+  setComposerDraft(value: string): void {
+    if (value === this.composerDraft) {
+      return;
+    }
+
+    this.composerDraft = value;
+    this.schedulePluginDataSave();
+  }
+
+  getProjectContextPaths(): string[] {
+    return this.settings.projectContextPaths
+      .split(/\r?\n/)
+      .map((value) => value.trim())
+      .filter(Boolean);
   }
 
   setPendingContext(context: CodexContext | null): void {
@@ -275,14 +317,26 @@ export default class CodexWorkbenchPlugin extends Plugin {
       return;
     }
 
+    await this.insertReplyText(this.lastAssistantReply);
+  }
+
+  async insertReplyText(reply: string): Promise<boolean> {
+    const content = reply.trim();
+    if (!content) {
+      new Notice("There is no assistant reply to insert yet.");
+      return false;
+    }
+
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (!view) {
       new Notice("Open a markdown note first.");
-      return;
+      return false;
     }
 
-    view.editor.replaceRange(this.lastAssistantReply, view.editor.getCursor());
-    new Notice("Inserted the last assistant reply at the cursor.");
+    view.editor.replaceRange(content, view.editor.getCursor());
+    new Notice("Inserted the assistant reply at the cursor.");
+    this.refreshViewInteractions();
+    return true;
   }
 
   async replaceSelectionWithLastReply(): Promise<void> {
@@ -291,19 +345,31 @@ export default class CodexWorkbenchPlugin extends Plugin {
       return;
     }
 
+    await this.replaceSelectionWithReplyText(this.lastAssistantReply);
+  }
+
+  async replaceSelectionWithReplyText(reply: string): Promise<boolean> {
+    const content = reply.trim();
+    if (!content) {
+      new Notice("There is no assistant reply to use yet.");
+      return false;
+    }
+
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (!view) {
       new Notice("Open a markdown note first.");
-      return;
+      return false;
     }
 
-    if (!view.editor.getSelection()) {
+    if (!view.editor.getSelection().trim()) {
       new Notice("Select the text you want to replace first.");
-      return;
+      return false;
     }
 
-    view.editor.replaceSelection(this.lastAssistantReply);
-    new Notice("Replaced the selection with the last assistant reply.");
+    view.editor.replaceSelection(content);
+    new Notice("Replaced the selection with the assistant reply.");
+    this.refreshViewInteractions();
+    return true;
   }
 
   async copyLastReply(): Promise<void> {
@@ -312,8 +378,24 @@ export default class CodexWorkbenchPlugin extends Plugin {
       return;
     }
 
-    await navigator.clipboard.writeText(this.lastAssistantReply);
-    new Notice("Copied the last assistant reply.");
+    await this.copyReplyText(this.lastAssistantReply);
+  }
+
+  async copyReplyText(reply: string): Promise<boolean> {
+    const content = reply.trim();
+    if (!content) {
+      new Notice("There is no assistant reply to copy yet.");
+      return false;
+    }
+
+    try {
+      await navigator.clipboard.writeText(content);
+      new Notice("Copied the assistant reply.");
+      return true;
+    } catch {
+      new Notice("Could not copy the assistant reply.");
+      return false;
+    }
   }
 
   async resetConversationSession(): Promise<void> {
@@ -409,6 +491,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
   private registerDomEvents(): void {
     this.registerDomEvent(document, "selectionchange", () => {
       this.selectionToolbar?.queueUpdate();
+      this.refreshViewInteractions();
     });
 
     this.registerDomEvent(document, "scroll", () => {
@@ -420,6 +503,20 @@ export default class CodexWorkbenchPlugin extends Plugin {
         this.selectionToolbar?.queueUpdate();
       }, 0);
     });
+
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () => {
+        this.selectionToolbar?.queueUpdate();
+        this.refreshViewInteractions();
+      }),
+    );
+
+    this.registerEvent(
+      this.app.workspace.on("file-open", () => {
+        this.selectionToolbar?.queueUpdate();
+        this.refreshViewInteractions();
+      }),
+    );
   }
 
   private captureNoteContext(editor: Editor, view: MarkdownView): CodexContext | null {
@@ -500,6 +597,15 @@ export default class CodexWorkbenchPlugin extends Plugin {
     });
   }
 
+  private refreshViewInteractions(): void {
+    const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_CODEX_WORKBENCH);
+    leaves.forEach((leaf) => {
+      if (leaf.view instanceof CodexWorkbenchView) {
+        leaf.view.refreshInteractiveState();
+      }
+    });
+  }
+
   private getConversationCwd(): string {
     const adapter = this.app.vault.adapter;
     if (adapter instanceof FileSystemAdapter) {
@@ -511,6 +617,17 @@ export default class CodexWorkbenchPlugin extends Plugin {
 
   private buildCodexPrompt(question: string, context?: CodexContext | null): string {
     const sections = [`User request:\n${question}`];
+    const projectContextPaths = this.getProjectContextPaths();
+    const conversationCwd = this.getConversationCwd();
+
+    sections.push(
+      [
+        `Vault workspace root: ${conversationCwd}`,
+        projectContextPaths.length > 0
+          ? `Project context directories:\n${projectContextPaths.map((projectPath, index) => `${index + 1}. ${projectPath}`).join("\n")}`
+          : "Project context directories: (none configured)",
+      ].join("\n\n"),
+    );
 
     if (context) {
       sections.push(
@@ -528,7 +645,11 @@ export default class CodexWorkbenchPlugin extends Plugin {
     }
 
     sections.push(
-      "Answer inside the Obsidian sidebar. Keep the response directly useful for the current note and avoid taking external actions unless the user explicitly asks.",
+      [
+        "Answer inside the Obsidian sidebar.",
+        "When the request is code-related, treat the listed project context directories as the baseline engineering context.",
+        "Keep the response directly useful for the current note and avoid taking external actions unless the user explicitly asks.",
+      ].join(" "),
     );
 
     return sections.join("\n\n");
@@ -596,6 +717,17 @@ export default class CodexWorkbenchPlugin extends Plugin {
     return {
       decision: decision.decision,
     };
+  }
+
+  private schedulePluginDataSave(): void {
+    if (this.draftSaveHandle !== null) {
+      window.clearTimeout(this.draftSaveHandle);
+    }
+
+    this.draftSaveHandle = window.setTimeout(() => {
+      this.draftSaveHandle = null;
+      void this.savePluginData();
+    }, 250);
   }
 }
 
