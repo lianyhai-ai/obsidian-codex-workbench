@@ -29,9 +29,12 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Codex Workbench" });
+    new Setting(containerEl)
+      .setName("Codex Workbench")
+      .setHeading();
+
     containerEl.createEl("p", {
-      text: "Configure how the plugin talks to your model endpoint and how aggressively it surfaces selection shortcuts.",
+      text: "Configure how the plugin talks to your model endpoint, which repo roots are available in Project Mode, and how aggressively it surfaces selection shortcuts.",
       cls: "codex-workbench-settings-copy",
     });
 
@@ -95,7 +98,7 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Project context directories")
-      .setDesc("One directory per line. These paths are injected into each Codex turn as the baseline engineering context.")
+      .setDesc("One directory per line. These repo roots become available in Project Mode and repo context packs.")
       .addTextArea((text) =>
         text
           .setPlaceholder("/Users/you/project-a\n/Users/you/project-b")

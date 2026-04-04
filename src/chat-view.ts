@@ -1,4 +1,4 @@
-import { ItemView, MarkdownRenderer, MarkdownView, Notice, WorkspaceLeaf, setIcon } from "obsidian";
+import { ItemView, MarkdownRenderer, MarkdownView, Menu, Notice, WorkspaceLeaf, setIcon } from "obsidian";
 import type CodexWorkbenchPlugin from "./main";
 import type { ChatTurn } from "./types";
 
@@ -6,19 +6,23 @@ export const VIEW_TYPE_CODEX_WORKBENCH = "codex-workbench-view";
 const STREAMING_MARKDOWN_INITIAL_DELAY_MS = 40;
 const STREAMING_MARKDOWN_DEBOUNCE_MS = 120;
 const MATH_SOURCE_ATTRIBUTE = "data-codex-math-source";
+const SOURCE_BLOCK_ATTRIBUTE = "data-codex-source-block";
 
 type RenderedTurnRefs = {
   turnId: string;
   wrapper: HTMLElement;
   body: HTMLElement;
+  citationsEl: HTMLElement | null;
   role: ChatTurn["role"];
   content: string;
   streaming: boolean;
   sourcePath: string;
   renderMode: "plain" | "markdown";
+  citationsKey: string;
   copyButton: HTMLButtonElement | null;
   insertButton: HTMLButtonElement | null;
   replaceButton: HTMLButtonElement | null;
+  studyButton: HTMLButtonElement | null;
   markdownRenderHandle: number | null;
   markdownRenderVersion: number;
 };
@@ -30,15 +34,15 @@ export class CodexWorkbenchView extends ItemView {
   private contextCardEl: HTMLElement | null = null;
   private sendButtonEl: HTMLButtonElement | null = null;
   private askSelectionButtonEl: HTMLButtonElement | null = null;
-  private newSessionButtonEl: HTMLButtonElement | null = null;
-  private insertLastButtonEl: HTMLButtonElement | null = null;
-  private replaceSelectionButtonEl: HTMLButtonElement | null = null;
-  private copyLastButtonEl: HTMLButtonElement | null = null;
+  private composerMenuButtonEl: HTMLButtonElement | null = null;
   private messageRenderVersion = 0;
   private isComposerComposing = false;
   private renderedTurns = new Map<string, RenderedTurnRefs>();
   private emptyStateEl: HTMLElement | null = null;
   private loadingRowEl: HTMLElement | null = null;
+  private scrollToLatestOnNextRender = false;
+  private followupScrollHandle: number | null = null;
+  private recoveryScrollHandles: number[] = [];
 
   constructor(leaf: WorkspaceLeaf, plugin: CodexWorkbenchPlugin) {
     super(leaf);
@@ -58,10 +62,13 @@ export class CodexWorkbenchView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    this.requestScrollToLatest();
     this.render();
   }
 
   async onClose(): Promise<void> {
+    this.cancelFollowupScroll();
+    this.cancelRecoveryScrolls();
     this.disposeRenderedTurns();
     this.emptyStateEl = null;
     this.loadingRowEl = null;
@@ -72,6 +79,11 @@ export class CodexWorkbenchView extends ItemView {
     void this.renderMessages();
     this.renderContextCard();
     this.refreshInteractiveState();
+  }
+
+  requestScrollToLatest(): void {
+    this.scrollToLatestOnNextRender = true;
+    this.scheduleRecoveryScrolls();
   }
 
   refreshInteractiveState(): void {
@@ -103,11 +115,11 @@ export class CodexWorkbenchView extends ItemView {
     const composerWrap = shell.createDiv({ cls: "codex-workbench-composer-wrap" });
     const composerTopline = composerWrap.createDiv({ cls: "codex-workbench-composer-topline" });
     composerTopline.createEl("span", {
-      text: "Chat",
+      text: "Codex",
       cls: "codex-workbench-composer-label",
     });
     composerTopline.createEl("span", {
-      text: "Enter to send, Shift+Enter for newline",
+      text: "Enter send, Shift+Enter newline, /learning-mode study",
       cls: "codex-workbench-composer-hint",
     });
 
@@ -115,7 +127,7 @@ export class CodexWorkbenchView extends ItemView {
       cls: "codex-workbench-composer",
       attr: {
         rows: "1",
-        placeholder: "Ask Codex to explain, rewrite, draft, or continue from the current note context...",
+        placeholder: "Ask Codex to explain, rewrite, plan, or study...",
       },
     });
     this.applyComposerValue(this.plugin.composerDraft, false);
@@ -150,27 +162,66 @@ export class CodexWorkbenchView extends ItemView {
 
     const composerFooter = composerWrap.createDiv({ cls: "codex-workbench-composer-footer" });
     const footerActions = composerFooter.createDiv({ cls: "codex-workbench-composer-actions" });
-    this.askSelectionButtonEl = this.createActionButton(footerActions, "Ask selection", "highlighter", async () => {
+    this.askSelectionButtonEl = this.createIconActionButton(footerActions, "Ask selection", "highlighter", async () => {
       await this.plugin.askSelectionFromActiveEditor();
-    });
-    this.newSessionButtonEl = this.createActionButton(footerActions, "New session", "rotate-ccw", () => {
-      void this.plugin.resetConversationSession();
-    });
-    this.insertLastButtonEl = this.createActionButton(footerActions, "Insert last", "corner-down-left", () => {
-      void this.plugin.insertLastReply();
-    });
-    this.replaceSelectionButtonEl = this.createActionButton(footerActions, "Replace selection", "replace", () => {
-      void this.plugin.replaceSelectionWithLastReply();
-    });
-    this.copyLastButtonEl = this.createActionButton(footerActions, "Copy last", "copy", () => {
-      void this.plugin.copyLastReply();
-    });
+    }, "codex-workbench-composer-quick-action");
+    this.composerMenuButtonEl = this.createIconMenuButton(footerActions, "More actions", "ellipsis", (menu) => {
+      const hasLastReply = Boolean(this.plugin.lastAssistantReply);
+      const hasActiveEditor = this.hasActiveMarkdownView();
+      const hasSelection = this.hasActiveSelection();
 
-    this.sendButtonEl = composerFooter.createEl("button", {
+      menu.addItem((item) => {
+        item
+          .setTitle("New session")
+          .setIcon("rotate-ccw")
+          .setDisabled(this.plugin.isBusy)
+          .onClick(() => {
+            void this.plugin.resetConversationSession();
+          });
+      });
+      menu.addItem((item) => {
+        item
+          .setTitle("Copy last")
+          .setIcon("copy")
+          .setDisabled(!hasLastReply)
+          .onClick(() => {
+            void this.plugin.copyLastReply();
+          });
+      });
+      menu.addItem((item) => {
+        item
+          .setTitle("Insert last")
+          .setIcon("corner-down-left")
+          .setDisabled(!(hasLastReply && hasActiveEditor))
+          .onClick(() => {
+            void this.plugin.insertLastReply();
+          });
+      });
+      menu.addItem((item) => {
+        item
+          .setTitle("Replace selection")
+          .setIcon("replace")
+          .setDisabled(!(hasLastReply && hasSelection))
+          .onClick(() => {
+            void this.plugin.replaceSelectionWithLastReply();
+          });
+      });
+    }, "codex-workbench-composer-quick-action");
+
+    const submitActions = composerFooter.createDiv({ cls: "codex-workbench-submit-actions" });
+    this.sendButtonEl = submitActions.createEl("button", {
       cls: "mod-cta codex-workbench-send-button",
       text: "Send",
+      attr: {
+        type: "button",
+      },
     });
     this.sendButtonEl.addEventListener("click", () => {
+      if (this.plugin.isBusy && this.plugin.supportsInterruptCurrentTurn()) {
+        void this.plugin.interruptCurrentTurn();
+        return;
+      }
+
       void this.submitComposer();
     });
 
@@ -180,19 +231,25 @@ export class CodexWorkbenchView extends ItemView {
   private renderHeaderState(): void {
     const hasDraft = Boolean(this.composerEl?.value.trim());
     const hasLastReply = Boolean(this.plugin.lastAssistantReply);
-    const hasActiveEditor = this.hasActiveMarkdownView();
     const hasSelection = this.hasActiveSelection();
+    const canInterrupt = this.plugin.canInterruptCurrentTurn();
 
     if (this.sendButtonEl) {
-      this.sendButtonEl.disabled = this.plugin.isBusy || !hasDraft;
-      this.sendButtonEl.setText(this.plugin.isBusy ? "Working..." : "Send");
+      const isBusy = this.plugin.isBusy;
+      this.sendButtonEl.disabled = isBusy
+        ? !canInterrupt || this.plugin.isInterrupting
+        : !hasDraft;
+      this.sendButtonEl.toggleClass("mod-cta", !isBusy);
+      this.sendButtonEl.toggleClass("mod-warning", isBusy);
+      this.sendButtonEl.setText(
+        isBusy
+          ? (this.plugin.isInterrupting ? "Stopping..." : (canInterrupt ? "Stop" : "Working..."))
+          : "Send",
+      );
     }
 
     this.setButtonState(this.askSelectionButtonEl, !this.plugin.isBusy && hasSelection);
-    this.setButtonState(this.newSessionButtonEl, !this.plugin.isBusy);
-    this.setButtonState(this.insertLastButtonEl, hasLastReply && hasActiveEditor);
-    this.setButtonState(this.replaceSelectionButtonEl, hasLastReply && hasSelection);
-    this.setButtonState(this.copyLastButtonEl, hasLastReply);
+    this.setButtonState(this.composerMenuButtonEl, !this.plugin.isBusy || hasLastReply);
   }
 
   private renderContextCard(): void {
@@ -202,60 +259,139 @@ export class CodexWorkbenchView extends ItemView {
 
     this.contextCardEl.empty();
     const context = this.plugin.pendingContext;
-    const projectContextPaths = this.plugin.getProjectContextPaths();
-    this.contextCardEl.toggleClass("is-empty", !context && projectContextPaths.length === 0);
+    const availableTags = this.plugin.getAvailableTags(context);
+    const activeTag = this.plugin.getActiveTag(context);
+    const availableRepos = this.plugin.getAvailableRepoPaths();
+    const activeRepo = this.plugin.getActiveRepoPath();
+    const activePack = this.plugin.getActiveContextPack();
 
-    const noteRow = this.contextCardEl.createDiv({ cls: "codex-workbench-context-row codex-workbench-context-row--note" });
-    noteRow.createEl("span", {
-      text: "Note",
-      cls: "codex-workbench-context-eyebrow",
+    const rail = this.contextCardEl.createDiv({ cls: "codex-workbench-context-rail" });
+    const modeButtons = rail.createDiv({ cls: "codex-workbench-segmented-control codex-workbench-segmented-control--compact" });
+    this.createSegmentButton(modeButtons, "default", "Default", this.plugin.workbenchMode === "default", async () => {
+      await this.plugin.setWorkbenchMode("default");
+    });
+    this.createSegmentButton(modeButtons, "learning", "Learning", this.plugin.workbenchMode === "learning", async () => {
+      await this.plugin.setWorkbenchMode("learning");
     });
 
-    const noteSummary = noteRow.createDiv({
-      cls: "codex-workbench-context-summary",
-      attr: context ? { title: context.notePath } : {},
+    const scopeButtons = rail.createDiv({ cls: "codex-workbench-segmented-control codex-workbench-segmented-control--compact" });
+    this.plugin.getAvailableContextScopes().forEach((scope) => {
+      this.createSegmentButton(scopeButtons, scope, titleCase(scope), this.plugin.activeContextScope === scope, async () => {
+        await this.plugin.setActiveContextScope(scope);
+      });
     });
 
-    if (!context) {
-      noteSummary.createEl("span", {
-        text: "No pinned selection",
-        cls: "codex-workbench-context-title",
+    const packSelect = rail.createEl("select", { cls: "dropdown codex-workbench-context-select codex-workbench-context-select--pack" });
+    packSelect.createEl("option", {
+      text: "Current setup",
+      value: "",
+    });
+    this.plugin.getContextPacks().forEach((pack) => {
+      packSelect.createEl("option", {
+        text: pack.name,
+        value: pack.id,
       });
-      noteSummary.createEl("span", {
-        text: "Select text to anchor the next turn.",
-        cls: "codex-workbench-context-copy codex-workbench-context-copy--compact",
-      });
-    } else {
-      noteSummary.createEl("span", {
-        text: context.noteTitle,
-        cls: "codex-workbench-context-title",
-      });
-      noteSummary.createEl("span", {
-        text: context.selectionPreview,
-        cls: "codex-workbench-context-preview",
+    });
+    packSelect.value = activePack?.id ?? "";
+    packSelect.addEventListener("change", () => {
+      void this.plugin.applyContextPack(packSelect.value || null);
+    });
+
+    const packMenuButton = rail.createEl("button", {
+      cls: "clickable-icon codex-workbench-inline-button codex-workbench-inline-button--compact codex-workbench-inline-button--icon",
+      attr: {
+        type: "button",
+        "aria-label": activePack ? `Manage ${activePack.name}` : "Save or manage context packs",
+        title: activePack ? `Manage ${activePack.name}` : "Save or manage context packs",
+      },
+    });
+    setIcon(packMenuButton, "ellipsis");
+    packMenuButton.addEventListener("click", (event) => {
+      const menu = new Menu();
+      menu.addItem((item) => {
+        item
+          .setTitle("Save current setup as pack")
+          .setIcon("plus")
+          .onClick(() => {
+            void this.plugin.saveCurrentContextPack();
+          });
       });
 
-      const clearButton = noteRow.createEl("button", {
-        text: "Clear",
-        cls: "clickable-icon codex-workbench-inline-button codex-workbench-inline-button--compact",
+      if (activePack) {
+        menu.addItem((item) => {
+          item
+            .setTitle(`Edit ${activePack.name}`)
+            .setIcon("pencil")
+            .onClick(() => {
+              void this.plugin.editActiveContextPack();
+            });
+        });
+        menu.addItem((item) => {
+          item
+            .setTitle(`Delete ${activePack.name}`)
+            .setIcon("trash")
+            .onClick(() => {
+              void this.plugin.deleteActiveContextPack();
+            });
+        });
+      }
+
+      menu.showAtMouseEvent(event);
+    });
+
+    if (this.plugin.activeContextScope === "tag" && availableTags.length > 0) {
+      const tagSelect = rail.createEl("select", { cls: "dropdown codex-workbench-context-select" });
+      availableTags.forEach((tag) => {
+        tagSelect.createEl("option", {
+          text: tag,
+          value: tag,
+        });
       });
-      clearButton.addEventListener("click", () => {
-        this.plugin.clearPendingContext();
+      tagSelect.value = activeTag ?? availableTags[0] ?? "";
+      tagSelect.addEventListener("change", () => {
+        void this.plugin.setActiveTag(tagSelect.value);
       });
     }
 
-    if (projectContextPaths.length > 0) {
-      const projectRow = this.contextCardEl.createDiv({ cls: "codex-workbench-context-row codex-workbench-context-row--project" });
-      projectRow.createEl("span", {
-        text: "Project",
-        cls: "codex-workbench-context-eyebrow",
+    if (this.plugin.activeContextScope === "repo" && availableRepos.length > 0) {
+      const repoSelect = rail.createEl("select", { cls: "dropdown codex-workbench-context-select" });
+      availableRepos.forEach((repoPath) => {
+        repoSelect.createEl("option", {
+          text: this.getPathLabel(repoPath),
+          value: repoPath,
+        });
       });
-      projectRow.createEl("span", {
-        text: this.buildProjectContextSummary(projectContextPaths),
-        cls: "codex-workbench-context-copy codex-workbench-context-copy--compact",
+      repoSelect.value = activeRepo ?? availableRepos[0] ?? "";
+      repoSelect.addEventListener("change", () => {
+        void this.plugin.setActiveRepoPath(repoSelect.value);
+      });
+    }
+
+    if (context) {
+      const noteSummary = rail.createDiv({
+        cls: "codex-workbench-context-note-chip",
+        attr: { title: context.notePath },
+      });
+      noteSummary.createEl("span", {
+        text: context.noteTitle,
+        cls: "codex-workbench-context-note-title",
+      });
+      noteSummary.createEl("span", {
+        text: context.selection ? `· ${context.selectionPreview}` : "· Current note",
+        cls: "codex-workbench-context-note-copy",
+      });
+
+      const clearButton = rail.createEl("button", {
+        cls: "clickable-icon codex-workbench-inline-button codex-workbench-inline-button--compact codex-workbench-inline-button--icon codex-workbench-context-clear-button",
         attr: {
-          title: projectContextPaths.join("\n"),
+          type: "button",
+          "aria-label": "Clear pinned context",
+          title: "Clear pinned context",
         },
+      });
+      setIcon(clearButton, "x");
+      clearButton.addEventListener("click", () => {
+        this.plugin.clearPendingContext();
       });
     }
   }
@@ -265,6 +401,7 @@ export class CodexWorkbenchView extends ItemView {
       return;
     }
 
+    const shouldForceScrollToLatest = this.scrollToLatestOnNextRender;
     const shouldStickToBottom = this.isMessageListNearBottom();
     const renderVersion = ++this.messageRenderVersion;
     const history = this.plugin.history;
@@ -312,6 +449,7 @@ export class CodexWorkbenchView extends ItemView {
       cursor = refs.wrapper.nextSibling;
 
       await this.renderMessageBody(refs, turn);
+      this.renderMessageCitations(refs, turn);
       if (renderVersion !== this.messageRenderVersion) {
         return;
       }
@@ -320,8 +458,9 @@ export class CodexWorkbenchView extends ItemView {
     this.syncLoadingRow(this.plugin.isBusy && !history.some((turn) => turn.streaming));
     this.refreshMessageActionStates();
 
-    if (shouldStickToBottom || history.length <= 1) {
-      this.scrollMessagesToBottom();
+    if (shouldForceScrollToLatest || shouldStickToBottom || history.length <= 1) {
+      this.scrollMessagesToBottom(true);
+      this.scrollToLatestOnNextRender = false;
     }
   }
 
@@ -373,9 +512,14 @@ export class CodexWorkbenchView extends ItemView {
       body.addClass("is-streaming");
     }
 
+    const citationsEl = turn.role === "assistant"
+      ? card.createDiv({ cls: "codex-workbench-message-citations" })
+      : null;
+
     let copyButton: HTMLButtonElement | null = null;
     let insertButton: HTMLButtonElement | null = null;
     let replaceButton: HTMLButtonElement | null = null;
+    let studyButton: HTMLButtonElement | null = null;
 
     if (turn.role === "assistant") {
       const footer = card.createDiv({ cls: "codex-workbench-message-footer" });
@@ -388,20 +532,59 @@ export class CodexWorkbenchView extends ItemView {
       replaceButton = this.createActionButton(footer, "Replace", "replace", () => {
         void this.plugin.replaceSelectionWithReplyText(turn.content);
       }, "codex-workbench-message-action");
+      if (turn.mode === "learning") {
+        studyButton = this.createMenuActionButton(footer, "Study", "book-open", (menu) => {
+          menu.addItem((item) => {
+            item
+              .setTitle("Study note")
+              .setIcon("file-text")
+              .onClick(() => {
+                void this.plugin.createLearningArtifactFromTurn(turn.id, "study-note");
+              });
+          });
+          menu.addItem((item) => {
+            item
+              .setTitle("Term cards")
+              .setIcon("library")
+              .onClick(() => {
+                void this.plugin.createLearningArtifactFromTurn(turn.id, "term-cards");
+              });
+          });
+          menu.addItem((item) => {
+            item
+              .setTitle("Confusions")
+              .setIcon("circle-alert")
+              .onClick(() => {
+                void this.plugin.createLearningArtifactFromTurn(turn.id, "confusions");
+              });
+          });
+          menu.addItem((item) => {
+            item
+              .setTitle("Anki Q&A")
+              .setIcon("list-checks")
+              .onClick(() => {
+                void this.plugin.createLearningArtifactFromTurn(turn.id, "qa-cards");
+              });
+          });
+        }, "codex-workbench-message-action");
+      }
     }
 
     const refs: RenderedTurnRefs = {
       turnId: turn.id,
       wrapper,
       body,
+      citationsEl,
       role: turn.role,
       content: "",
       streaming: Boolean(turn.streaming),
       sourcePath: this.getSourcePath(turn),
       renderMode: "plain",
+      citationsKey: "",
       copyButton,
       insertButton,
       replaceButton,
+      studyButton,
       markdownRenderHandle: null,
       markdownRenderVersion: 0,
     };
@@ -457,6 +640,49 @@ export class CodexWorkbenchView extends ItemView {
     this.refreshMessageActionStates();
   }
 
+  private renderMessageCitations(refs: RenderedTurnRefs, turn: ChatTurn): void {
+    if (!refs.citationsEl) {
+      return;
+    }
+
+    const citations = turn.citations ?? [];
+    const nextKey = citations
+      .map((citation) => `${citation.kind}:${citation.label}:${citation.path ?? ""}:${citation.detail ?? ""}`)
+      .join("|");
+
+    if (refs.citationsKey === nextKey) {
+      return;
+    }
+
+    refs.citationsKey = nextKey;
+    refs.citationsEl.empty();
+    refs.citationsEl.hidden = citations.length === 0;
+
+    citations.forEach((citation) => {
+      const chip = refs.citationsEl?.createEl("button", {
+        cls: `codex-workbench-citation codex-workbench-citation--${citation.kind}`,
+        text: citation.label,
+        attr: {
+          type: "button",
+        },
+      });
+
+      const titleParts = [citation.path, citation.detail].filter(Boolean);
+      if (chip && titleParts.length > 0) {
+        chip.title = titleParts.join("\n");
+      }
+
+      if (!chip) {
+        return;
+      }
+
+      chip.disabled = !citation.path;
+      chip.addEventListener("click", () => {
+        void this.plugin.openCitation(citation);
+      });
+    });
+  }
+
   private renderPlainBody(refs: RenderedTurnRefs, content: string, streaming: boolean): void {
     refs.body.empty();
     refs.body.addClass("is-plain");
@@ -496,9 +722,15 @@ export class CodexWorkbenchView extends ItemView {
   private async renderMarkdownBody(refs: RenderedTurnRefs, content: string, streaming: boolean): Promise<void> {
     const renderVersion = ++refs.markdownRenderVersion;
     const fragment = createDiv();
+    const sourceBlocks = splitMarkdownIntoSourceBlocks(content);
 
     try {
-      await MarkdownRenderer.render(this.app, content, fragment, refs.sourcePath, this);
+      for (const sourceBlock of sourceBlocks) {
+        const blockEl = fragment.createDiv({ cls: "codex-workbench-source-block" });
+        blockEl.setAttribute(SOURCE_BLOCK_ATTRIBUTE, sourceBlock);
+        await MarkdownRenderer.render(this.app, sourceBlock, blockEl, refs.sourcePath, this);
+      }
+
       if (renderVersion !== refs.markdownRenderVersion) {
         return;
       }
@@ -593,7 +825,8 @@ export class CodexWorkbenchView extends ItemView {
       return;
     }
 
-    const source = refs.content.trim();
+    const range = selection.getRangeAt(0);
+    const source = this.getSelectedSourceBlocks(range, refs.body);
     if (!source) {
       return;
     }
@@ -602,16 +835,95 @@ export class CodexWorkbenchView extends ItemView {
     event.preventDefault();
   }
 
+  private getSelectedSourceBlocks(range: Range, body: HTMLElement): string {
+    const sourceBlocks = Array.from(body.querySelectorAll<HTMLElement>(`[${SOURCE_BLOCK_ATTRIBUTE}]`));
+    if (sourceBlocks.length === 0) {
+      return body.innerText.trim();
+    }
+
+    const selectedSources = sourceBlocks
+      .filter((block) => {
+        try {
+          return range.intersectsNode(block);
+        } catch {
+          return false;
+        }
+      })
+      .map((block) => block.getAttribute(SOURCE_BLOCK_ATTRIBUTE) ?? "")
+      .filter((blockSource) => blockSource.trim().length > 0);
+
+    return selectedSources.join("\n\n").trim();
+  }
+
   private getSourcePath(turn: ChatTurn): string {
     return turn.context?.notePath ?? this.plugin.pendingContext?.notePath ?? "";
   }
 
-  private scrollMessagesToBottom(): void {
+  private scrollMessagesToBottom(scheduleFollowup = false): void {
     if (!this.messageListEl) {
       return;
     }
 
     this.messageListEl.scrollTop = this.messageListEl.scrollHeight;
+    this.scheduleRecoveryScrolls();
+
+    if (!scheduleFollowup) {
+      return;
+    }
+
+    this.scheduleFollowupScroll();
+  }
+
+  private scheduleFollowupScroll(): void {
+    this.cancelFollowupScroll();
+    this.followupScrollHandle = window.setTimeout(() => {
+      this.followupScrollHandle = null;
+      if (!this.messageListEl) {
+        return;
+      }
+
+      this.messageListEl.scrollTop = this.messageListEl.scrollHeight;
+      window.requestAnimationFrame(() => {
+        if (!this.messageListEl) {
+          return;
+        }
+
+        this.messageListEl.scrollTop = this.messageListEl.scrollHeight;
+      });
+    }, 60);
+  }
+
+  private cancelFollowupScroll(): void {
+    if (this.followupScrollHandle !== null) {
+      window.clearTimeout(this.followupScrollHandle);
+      this.followupScrollHandle = null;
+    }
+  }
+
+  private scheduleRecoveryScrolls(): void {
+    this.cancelRecoveryScrolls();
+    const delays = [0, 80, 220, 420];
+    this.recoveryScrollHandles = delays.map((delay) => window.setTimeout(() => {
+      if (!this.messageListEl) {
+        return;
+      }
+
+      this.messageListEl.scrollTop = this.messageListEl.scrollHeight;
+      window.requestAnimationFrame(() => {
+        if (!this.messageListEl) {
+          return;
+        }
+
+        this.messageListEl.scrollTop = this.messageListEl.scrollHeight;
+      });
+    }, delay));
+  }
+
+  private cancelRecoveryScrolls(): void {
+    this.recoveryScrollHandles.forEach((handle) => {
+      window.clearTimeout(handle);
+    });
+    this.recoveryScrollHandles = [];
   }
 
   private createActionButton(
@@ -639,6 +951,93 @@ export class CodexWorkbenchView extends ItemView {
       void action();
     });
 
+    return button;
+  }
+
+  private createIconActionButton(
+    parent: HTMLElement,
+    label: string,
+    icon: string,
+    action: () => void | Promise<void>,
+    extraClass = "",
+  ): HTMLButtonElement {
+    const button = parent.createEl("button", {
+      cls: extraClass
+        ? `clickable-icon codex-workbench-toolbar-button ${extraClass}`
+        : "clickable-icon codex-workbench-toolbar-button",
+      attr: {
+        "aria-label": label,
+        title: label,
+        type: "button",
+      },
+    });
+
+    const iconContainer = button.createSpan({ cls: "codex-workbench-toolbar-button-icon" });
+    setIcon(iconContainer, icon);
+    button.addEventListener("click", () => {
+      void action();
+    });
+    return button;
+  }
+
+  private createSegmentButton(
+    parent: HTMLElement,
+    value: string,
+    label: string,
+    active: boolean,
+    action: () => void | Promise<void>,
+  ): HTMLButtonElement {
+    const button = parent.createEl("button", {
+      text: label,
+      cls: active
+        ? "clickable-icon codex-workbench-segment-button is-active"
+        : "clickable-icon codex-workbench-segment-button",
+      attr: {
+        type: "button",
+        "data-value": value,
+      },
+    });
+
+    button.addEventListener("click", () => {
+      void action();
+    });
+
+    return button;
+  }
+
+  private createMenuActionButton(
+    parent: HTMLElement,
+    label: string,
+    icon: string,
+    buildMenu: (menu: Menu) => void,
+    extraClass = "",
+  ): HTMLButtonElement {
+    const button = this.createActionButton(parent, label, icon, () => undefined, extraClass);
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const menu = new Menu();
+      buildMenu(menu);
+      menu.showAtMouseEvent(event);
+    });
+    return button;
+  }
+
+  private createIconMenuButton(
+    parent: HTMLElement,
+    label: string,
+    icon: string,
+    buildMenu: (menu: Menu) => void,
+    extraClass = "",
+  ): HTMLButtonElement {
+    const button = this.createIconActionButton(parent, label, icon, () => undefined, extraClass);
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const menu = new Menu();
+      buildMenu(menu);
+      menu.showAtMouseEvent(event);
+    });
     return button;
   }
 
@@ -691,8 +1090,29 @@ export class CodexWorkbenchView extends ItemView {
     button.disabled = !enabled;
   }
 
+  private setButtonLabel(button: HTMLButtonElement | null, label: string): void {
+    if (!button) {
+      return;
+    }
+
+    button.setAttribute("aria-label", label);
+    const labelEl = button.querySelector<HTMLElement>(".codex-workbench-toolbar-button-text");
+    if (labelEl) {
+      labelEl.setText(label);
+    }
+  }
+
   private async submitComposer(): Promise<void> {
     if (!this.composerEl) {
+      return;
+    }
+
+    const rawValue = this.composerEl.value;
+    const interpretedQuestion = await this.plugin.handleComposerCommand(rawValue);
+    const question = interpretedQuestion?.trim() ?? "";
+    if (interpretedQuestion === null) {
+      this.applyComposerValue("", true);
+      this.composerEl.focus();
       return;
     }
 
@@ -701,8 +1121,6 @@ export class CodexWorkbenchView extends ItemView {
       return;
     }
 
-    const rawValue = this.composerEl.value;
-    const question = rawValue.trim();
     if (!question) {
       new Notice("Type a question before sending.");
       return;
@@ -731,6 +1149,16 @@ export class CodexWorkbenchView extends ItemView {
       this.setButtonState(refs.copyButton, hasReply);
       this.setButtonState(refs.insertButton, hasReply && hasActiveEditor);
       this.setButtonState(refs.replaceButton, hasReply && hasSelection);
+      this.setButtonLabel(
+        refs.studyButton,
+        this.plugin.isGeneratingLearningArtifact && this.plugin.activeLearningArtifactTurnId === refs.turnId
+          ? "Studying..."
+          : "Study",
+      );
+      this.setButtonState(
+        refs.studyButton,
+        hasReply && !this.plugin.isBusy && !this.plugin.isGeneratingLearningArtifact && this.plugin.canCreateLearningArtifactForTurn(refs.turnId),
+      );
     });
   }
 
@@ -800,4 +1228,54 @@ export class CodexWorkbenchView extends ItemView {
     this.cancelScheduledMarkdownRender(refs);
     refs.wrapper.remove();
   }
+}
+
+function splitMarkdownIntoSourceBlocks(content: string): string[] {
+  const normalized = content.replace(/\r\n/g, "\n");
+  const blocks: string[] = [];
+  const lines = normalized.split("\n");
+  let index = 0;
+
+  while (index < lines.length) {
+    if (!lines[index]?.trim()) {
+      index += 1;
+      continue;
+    }
+
+    const fenceMatch = lines[index]?.match(/^(```+|~~~+|\$\$)\s*$/);
+    if (fenceMatch) {
+      const fence = fenceMatch[1];
+      const start = index;
+      index += 1;
+      while (index < lines.length && lines[index]?.trim() !== fence) {
+        index += 1;
+      }
+      if (index < lines.length) {
+        index += 1;
+      }
+      blocks.push(lines.slice(start, index).join("\n"));
+      continue;
+    }
+
+    const start = index;
+    while (index < lines.length && lines[index]?.trim()) {
+      const nestedFenceMatch = lines[index]?.match(/^(```+|~~~+|\$\$)\s*$/);
+      if (index > start && nestedFenceMatch) {
+        break;
+      }
+      index += 1;
+    }
+
+    blocks.push(lines.slice(start, index).join("\n"));
+  }
+
+  return blocks.filter((block) => block.trim().length > 0);
+}
+
+function titleCase(value: string): string {
+  return value
+    .split(/[-_\s]+/)
+    .filter(Boolean)
+    .map((segment) => segment[0]?.toUpperCase() + segment.slice(1))
+    .join(" ");
 }

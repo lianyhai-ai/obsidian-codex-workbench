@@ -3,8 +3,7 @@
   "name": "Codex Workbench",
   "version": "0.1.0",
   "minAppVersion": "1.5.0",
-  "description": "A focused sidebar for asking about selections, rewriting text, and working with note context.",
-  "author": "OpenAI Codex",
-  "authorUrl": "https://openai.com",
+  "description": "A local-first Codex workspace for note context, learning flows, and selection-based asking.",
+  "author": "Codex Workbench contributors",
   "isDesktopOnly": true
 }

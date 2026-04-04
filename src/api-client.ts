@@ -48,6 +48,8 @@ export async function requestCompletion(
       systemPrompt: settings.systemPrompt,
       question: payload.question,
       context: payload.context ?? null,
+      resolvedContextBlock: payload.resolvedContextBlock ?? "",
+      workbenchMode: payload.workbenchMode ?? "default",
       history: payload.history,
     }),
   });
@@ -88,6 +90,10 @@ function buildOpenAiCompatibleMessages(systemPrompt: string, payload: Completion
       ].join("\n")
     : "No explicit editor selection was attached.";
 
+  const workbenchBlock = payload.resolvedContextBlock
+    ? `Workbench mode: ${payload.workbenchMode ?? "default"}\n\n${payload.resolvedContextBlock}`
+    : `Workbench mode: ${payload.workbenchMode ?? "default"}\n\nNo extra workbench context block was attached.`;
+
   const historyMessages = payload.history.slice(-8).flatMap((turn) => {
     return {
       role: turn.role,
@@ -103,7 +109,7 @@ function buildOpenAiCompatibleMessages(systemPrompt: string, payload: Completion
     ...historyMessages,
     {
       role: "user",
-      content: `Question:\n${payload.question}\n\nContext:\n${contextBlock}`,
+      content: `Question:\n${payload.question}\n\nContext:\n${contextBlock}\n\nWorkbench context:\n${workbenchBlock}`,
     },
   ];
 }
@@ -178,8 +184,12 @@ function buildMockAnswer(payload: CompletionRequest): string {
   return [
     intro,
     selectedText,
+    `当前模式：${payload.workbenchMode ?? "default"}`,
     `你的问题：${payload.question}`,
     "这条回复来自 Mock 模式，所以现在还没有请求真实模型接口。",
+    payload.resolvedContextBlock
+      ? "这次请求还附带了一份更完整的工作台上下文块。"
+      : "这次请求没有附带额外的工作台上下文块。",
     "如果你要把它接成可用版本，下一步最直接的是把设置里的 Provider mode 切到 OpenAI-compatible，并填上你的网关地址。",
     "就交互层面来说，这个 MVP 已经具备了右侧会话、选区提问和回写动作，足够继续往流式输出、标题级上下文和模板命令扩展。",
   ].join("\n\n");

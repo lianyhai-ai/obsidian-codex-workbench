@@ -1,13 +1,16 @@
 {
   "name": "obsidian-codex-workbench",
   "version": "0.1.0",
-  "description": "An Obsidian plugin MVP for a Codex-style sidebar and selection-based asking.",
-  "main": "main.js",
+  "description": "A local-first Obsidian workbench for Codex sessions, note context, and learning artifacts.",
+  "main": "build/main.js",
   "type": "module",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-    "version": "node version-bump.mjs && git add manifest.json versions.json"
+    "clean": "node scripts/clean.mjs",
+    "release:bundle": "node scripts/prepare-release.mjs",
+    "release:check": "npm run clean && npm run build && npm run release:bundle",
+    "version": "node version-bump.mjs && git add manifest.json package.json versions.json"
   },
   "keywords": [
     "obsidian",
@@ -20,11 +23,11 @@
     "@types/node": "^16.11.6",
     "@types/ws": "^8.18.1",
     "esbuild": "0.25.5",
+    "obsidian": "latest",
     "tslib": "2.4.0",
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "obsidian": "latest",
     "ws": "^8.20.0"
   }
 }

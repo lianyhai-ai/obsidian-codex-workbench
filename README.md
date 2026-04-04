@@ -1,143 +1,234 @@
 # Codex Workbench
 
-`Codex Workbench` 是一个 Obsidian 插件 MVP，目标是把“右侧 AI 工作台 + 选中文本提问”做成一套顺手的编辑流。
+A local-first Obsidian workbench for Codex sessions, note context, guided learning, and selection-based asking.
 
-当前版本包含：
+- English: [Overview](#english) | [Disclosures](#disclosures) | [Development](#development)
+- 中文: [概览](#中文) | [披露说明](#披露说明) | [开发与发布](#开发与发布)
 
-- 右侧聊天面板
-- 面向选中文本的 `Ask Codex` 操作
-- 右键菜单入口
-- 插入到光标 / 替换选区 / 复制最近回答
-- 基于本地 `codex app-server` 的会话型后端
-- 持久化当前 Codex thread，并在下次打开 Obsidian 时恢复
-- `workspace-write` / `read-only` 沙箱切换
-- 本地审批弹窗，用于在需要时允许命令、改动或额外权限
-- 可配置的 HTTP 接口和 `Mock` 模式作为后备
+## English
 
-## 设计方向
+### Overview
 
-这版刻意做成“编辑工作台”而不是通用聊天产品：
+Codex Workbench turns the right sidebar into a focused workspace for:
 
-- 面板强调上下文和回写动作
-- 当你划线时，会优先围绕选区提问
-- 面板保留最近上下文卡片，减少“当前到底在问哪段”的迷失感
-- 当你重开 Obsidian 时，会优先把上一次本地 Codex session 接回来
+- asking about selected text
+- switching context by note, folder, tag, or repo
+- saving reusable context packs
+- showing citations for attached note, file, and selection context
+- running persistent Local Codex sessions through `codex app-server`
+- generating learning artifacts such as study notes, term cards, confusion lists, and Q/A cards
 
-更完整的设计说明见 [docs/mvp-design.md](docs/mvp-design.md)。
+This plugin is currently desktop-only.
 
-## 本地开发
+### Features
 
-1. 进入目录：
+- Local Codex mode with a real resumable thread
+- Selection-first asking with inline `Ask Codex`
+- Context modes: note, folder, tag, repo
+- Context packs for reusable working sets
+- Clickable citations that open source notes or files
+- Learning mode with study artifact generation
+- File write approvals for local Codex sessions
 
-```bash
-cd /Users/bytedance/Documents/Playground/obsidian-codex-workbench
+### Installation
+
+#### Community plugins
+
+After the plugin is approved by Obsidian, install it from `Settings -> Community plugins -> Browse`.
+
+#### GitHub releases
+
+1. Download `manifest.json`, `main.js`, and `styles.css` from the latest GitHub release.
+2. Create a folder named `codex-workbench` under your vault plugin directory:
+
+```text
+<vault>/.obsidian/plugins/codex-workbench
 ```
 
-2. 安装依赖：
+3. Place the three files in that folder.
+4. Restart Obsidian and enable `Codex Workbench`.
+
+### Requirements
+
+- Obsidian desktop `>= 1.5.0`
+- For `Local Codex` mode:
+  - a working `codex` CLI installation
+  - an authenticated local Codex session if required by your setup
+- For `OpenAI-compatible` or `Generic JSON` modes:
+  - a reachable HTTP endpoint
+
+### Disclosures
+
+Please read this section before using the plugin:
+
+- Desktop only: the plugin uses desktop-only capabilities and is not intended for mobile.
+- Local process: `Local Codex` mode starts a local `codex app-server` process on your machine.
+- Network access:
+  - `Local Codex` mode uses a local loopback WebSocket connection to the local Codex process.
+  - `OpenAI-compatible` and `Generic JSON` modes send your request payload to the configured remote endpoint.
+- Data access:
+  - the plugin can read the active note, selected text, nearby note context, context-pack notes, and configured repo snippets used for prompting and citations.
+- File writes:
+  - `workspace-write` mode may request permission for file changes through local Codex approvals.
+  - learning artifacts create or update Markdown files next to the current note.
+- External files:
+  - repo context can read files from user-configured local directories outside the vault.
+- Telemetry:
+  - the plugin does not include analytics, ads, or client-side telemetry.
+- Closed services:
+  - if you point the plugin at a remote API, that service may be proprietary and have its own privacy terms.
+
+### Development
 
 ```bash
 npm install
-```
-
-3. 构建：
-
-```bash
 npm run build
 ```
 
-4. 确认本机 `codex` CLI 可用并已登录：
+Build output is written to:
 
-```bash
-codex --version
+```text
+build/main.js
 ```
 
-5. 将这个目录拷贝到你的 vault：
+To prepare release assets locally:
+
+```bash
+npm run release:bundle
+```
+
+Release-ready files are written to:
+
+```text
+build/release/
+```
+
+### Release process
+
+1. Update `manifest.json` version.
+2. Run `npm run version`.
+3. Run `npm run release:check`.
+4. Create a Git tag matching the release version, for example `v0.1.0`.
+5. Push the tag to GitHub.
+6. Upload or let GitHub Actions publish `manifest.json`, `main.js`, and `styles.css` from `build/release/`.
+7. Submit the initial plugin entry to `obsidianmd/obsidian-releases`.
+
+Additional release notes are in [docs/release-checklist.md](docs/release-checklist.md).
+
+### Repository docs
+
+- [CHANGELOG.md](CHANGELOG.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [SECURITY.md](SECURITY.md)
+- [docs/mvp-design.md](docs/mvp-design.md)
+- [docs/release-checklist.md](docs/release-checklist.md)
+
+## 中文
+
+### 概览
+
+`Codex Workbench` 是一个偏本地优先的 Obsidian 工作台插件，目标是把 `Codex 会话 + 笔记上下文 + 学习引导` 合到右侧边栏里。
+
+它现在主要支持：
+
+- 基于划线的 `Ask Codex`
+- 按 `笔记 / 文件夹 / tag / repo` 切换上下文
+- 复用型 `Context Packs`
+- 引用来源展示与点击打开
+- 基于 `codex app-server` 的本地持久会话
+- `Learning mode` 下的学习产物回写
+
+### 主要功能
+
+- 本地 Codex thread 恢复与续接
+- 围绕选中文本提问
+- 多种上下文范围切换
+- 可保存的上下文包
+- 学习模式和学习收录
+- 本地审批与 `workspace-write`
+
+### 安装方式
+
+#### Obsidian 社区插件
+
+等插件通过官方审核后，可以直接在：
+
+```text
+设置 -> 第三方插件 -> 浏览
+```
+
+里安装。
+
+#### GitHub Release 手动安装
+
+1. 从最新 GitHub Release 下载 `manifest.json`、`main.js`、`styles.css`
+2. 在 vault 中创建：
 
 ```text
 <你的 Vault>/.obsidian/plugins/codex-workbench
 ```
 
-6. 在 Obsidian 中启用插件。
+3. 把这三个文件放进去
+4. 重启 Obsidian 并启用插件
 
-## 设置项
+### 使用前说明
 
-- `Provider mode`
-  - `Local Codex app-server`: 默认模式。插件会本地拉起 `codex app-server`，并把右侧聊天保持为一个真正的 Codex thread/session
-  - `Mock`: 不请求远端，直接返回演示型回答
-  - `OpenAI-compatible`: 兼容常见 `chat/completions` 结构
-  - `Generic JSON`: 发送通用 JSON，并从 `answer` 字段取值
-- `Codex CLI path`: 本地 `codex` 可执行文件路径，默认 `/usr/local/bin/codex`
-- `Sandbox mode`: `Workspace write` 或 `Read only`
-- `Approval policy`: `On request` / `Untrusted only` / `Never ask`
-- `Endpoint URL`: 你的网关或代理接口
-- `API key`: 可选
-- `Model`: 模型名
-- `Base instructions`: 本地 Codex thread 的基础指令，也用于 HTTP 模式的 system prompt
+- 仅支持桌面端，不支持移动端
+- `Local Codex` 模式会在本机启动 `codex app-server`
+- `OpenAI-compatible` / `Generic JSON` 模式会把请求内容发送到你配置的远端接口
+- 插件可能会读取：
+  - 当前笔记
+  - 选中文本
+  - 周边段落上下文
+  - context pack 中指定的笔记
+  - 配置的 repo 目录中的片段文件
+- `workspace-write` 模式下，本地 Codex 可能请求写文件审批
+- 学习产物会在当前笔记同目录下创建或更新 Markdown 文件
+- 插件本身不带遥测、埋点或广告
 
-## Local Codex 模式
+### 本地开发
 
-这版 MVP 优先接本地 `codex app-server`，特点是：
-
-- 右侧会话不是插件自己伪造历史，而是绑定到一个真实 Codex thread
-- 每次提问都会继续在同一个本地 session 上做 `turn/start`
-- 返回内容按流式 delta 逐步显示
-- 当前 thread id 会持久化，插件下次启动时会自动做 `thread/resume`
-- 可切换到 `workspace-write`，把只读对话升级成本地开发工作台
-- 当 Codex 需要额外批准时，会弹出本地确认框
-
-当前边界：
-
-- 是否把命令执行、文件改动和工具调用也可视化到侧栏里，这版还没展开做
-- 如果你中途修改了 sandbox 模式，最稳妥的做法仍然是点一次 `New session`
-
-## 接口约定
-
-### OpenAI-compatible
-
-请求体会类似：
-
-```json
-{
-  "model": "your-model",
-  "messages": [
-    { "role": "system", "content": "..." },
-    { "role": "user", "content": "..." }
-  ]
-}
+```bash
+npm install
+npm run build
 ```
 
-插件会优先尝试解析以下响应：
+构建产物会输出到：
 
-- `choices[0].message.content`
-- `output_text`
-- `answer`
-
-### Generic JSON
-
-请求体：
-
-```json
-{
-  "model": "your-model",
-  "systemPrompt": "...",
-  "question": "...",
-  "context": {},
-  "history": []
-}
+```text
+build/main.js
 ```
 
-响应体：
+如果要本地打发布包：
 
-```json
-{
-  "answer": "..."
-}
+```bash
+npm run release:bundle
 ```
 
-## 下一步建议
+发布资产会输出到：
 
-- 把命令输出和文件改动也渲染进侧栏，做成更完整的 agent timeline
-- 给审批弹窗补充“记住此规则”这类更细的长期授权能力
-- 为回答增加引用块和来源标注
-- 把上下文范围扩展到当前标题或整篇笔记
-- 增加“继续写”“缩写”“提炼行动项”等快捷模式
+```text
+build/release/
+```
+
+### 开发与发布
+
+推荐流程：
+
+1. 修改代码并运行 `npm run build`
+2. 更新 `manifest.json` 版本号
+3. 执行 `npm run version`
+4. 执行 `npm run release:check`
+5. 打 Git tag，例如 `v0.1.0`
+6. 通过 GitHub Release 发布 `manifest.json`、`main.js`、`styles.css`
+7. 首次版本再提交到 `obsidianmd/obsidian-releases`
+
+更完整的检查清单见 [docs/release-checklist.md](docs/release-checklist.md)。
+
+### 相关文档
+
+- [CHANGELOG.md](CHANGELOG.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [SECURITY.md](SECURITY.md)
+- [docs/mvp-design.md](docs/mvp-design.md)
+- [docs/release-checklist.md](docs/release-checklist.md)

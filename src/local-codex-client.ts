@@ -51,6 +51,7 @@ type ActiveTurn = {
   threadId: string;
   turnId: string;
   answer: string;
+  interruptRequested: boolean;
   onDelta?: (delta: string) => void;
   resolve: (value: LocalCodexTurnResult) => void;
   reject: (reason?: unknown) => void;
@@ -77,6 +78,16 @@ export interface LocalCodexHistoryEntry {
 export interface LocalCodexRestoreResult {
   threadId: string;
   history: LocalCodexHistoryEntry[];
+}
+
+export class LocalCodexTurnInterruptedError extends Error {
+  partialAnswer: string;
+
+  constructor(partialAnswer = "") {
+    super("Codex turn was interrupted.");
+    this.name = "LocalCodexTurnInterruptedError";
+    this.partialAnswer = partialAnswer;
+  }
 }
 
 export type LocalCodexApprovalRequest =
@@ -136,6 +147,10 @@ export class LocalCodexAppServerClient {
 
   get threadId(): string | null {
     return this.activeThreadId;
+  }
+
+  get hasActiveTurn(): boolean {
+    return Boolean(this.activeTurn);
   }
 
   setApprovalHandler(handler: ApprovalHandler): void {
@@ -210,11 +225,38 @@ export class LocalCodexAppServerClient {
         threadId,
         turnId,
         answer: "",
+        interruptRequested: false,
         onDelta: request.onDelta,
         resolve,
         reject,
       };
     });
+  }
+
+  async interruptTurn(): Promise<boolean> {
+    const activeTurn = this.activeTurn;
+    if (!activeTurn) {
+      return false;
+    }
+
+    if (activeTurn.interruptRequested) {
+      return true;
+    }
+
+    activeTurn.interruptRequested = true;
+
+    try {
+      await this.sendRequest("turn/interrupt", {
+        threadId: activeTurn.threadId,
+        turnId: activeTurn.turnId,
+      });
+      return true;
+    } catch (error) {
+      if (this.activeTurn?.turnId === activeTurn.turnId) {
+        this.activeTurn.interruptRequested = false;
+      }
+      throw error;
+    }
   }
 
   async dispose(): Promise<void> {
@@ -588,6 +630,20 @@ export class LocalCodexAppServerClient {
     }
 
     if (message.method === "turn/completed") {
+      const turn = params.turn as Record<string, unknown> | undefined;
+      const status = readString(turn?.status);
+      if (status === "interrupted") {
+        this.rejectActiveTurn(new LocalCodexTurnInterruptedError(this.activeTurn.answer.trim()));
+        return;
+      }
+
+      if (status === "failed") {
+        const turnError = turn?.error as Record<string, unknown> | undefined;
+        const errorMessage = readString(turnError?.message) || "Codex app-server turn failed.";
+        this.rejectActiveTurn(new Error(errorMessage));
+        return;
+      }
+
       const result: LocalCodexTurnResult = {
         threadId: this.activeTurn.threadId,
         turnId: this.activeTurn.turnId,

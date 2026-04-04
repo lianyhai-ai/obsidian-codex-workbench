@@ -1,0 +1,70 @@
+name: Bug report
+description: Report a reproducible problem with the plugin
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug report. Please include enough detail to reproduce the issue.
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: obsidian-version
+    attributes:
+      label: Obsidian version
+      placeholder: 1.5.0+
+    validations:
+      required: true
+  - type: dropdown
+    id: provider-mode
+    attributes:
+      label: Provider mode
+      options:
+        - Local Codex
+        - OpenAI-compatible
+        - Generic JSON
+        - Mock
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Desktop OS
+      placeholder: macOS 15 / Windows 11 / Ubuntu 24.04
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a note
+        2. Select a paragraph
+        3. Click Ask Codex
+        4. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs, screenshots, or recordings
+      render: shell
