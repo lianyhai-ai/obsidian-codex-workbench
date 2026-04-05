@@ -1,6 +1,6 @@
 {
   "name": "obsidian-codex-workbench",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "A local-first Obsidian workbench for Codex sessions, note context, and learning artifacts.",
   "main": "build/main.js",
   "type": "module",

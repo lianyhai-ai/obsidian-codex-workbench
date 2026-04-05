@@ -123,7 +123,7 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
       .setDesc("Optional bearer token for your endpoint.")
       .addText((text) => {
         text.inputEl.type = "password";
-        return text.setPlaceholder("your-api-key")
+        return text.setPlaceholder("your API key")
           .setValue(this.plugin.settings.apiKey)
           .onChange(async (value) => {
             this.plugin.settings.apiKey = value.trim();
@@ -136,7 +136,7 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
       .setDesc("Model name sent to the endpoint.")
       .addText((text) =>
         text
-          .setPlaceholder("your-model-name")
+          .setPlaceholder("your model name")
           .setValue(this.plugin.settings.model)
           .onChange(async (value) => {
             this.plugin.settings.model = value.trim();
