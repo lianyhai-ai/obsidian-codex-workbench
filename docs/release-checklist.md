@@ -28,7 +28,7 @@
 1. Update `manifest.json`
 2. Run `npm run version`
 3. Run `npm run release:check`
-4. Commit and tag the release, for example `0.1.1`
+4. Commit and tag the release, for example `0.1.2`
 5. Push the branch and tag
 6. Verify the GitHub release contains:
    - `manifest.json`

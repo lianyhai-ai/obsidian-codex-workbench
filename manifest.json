@@ -1,7 +1,7 @@
 {
   "id": "codex-workbench",
   "name": "Codex Workbench",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "minAppVersion": "1.5.0",
   "description": "A local-first Codex workspace for note context, learning flows, and selection-based asking.",
   "author": "Codex Workbench contributors",

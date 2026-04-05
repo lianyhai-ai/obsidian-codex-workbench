@@ -29,10 +29,6 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    new Setting(containerEl)
-      .setName("General")
-      .setHeading();
-
     containerEl.createEl("p", {
       text: "Configure how the plugin talks to your model endpoint, which repo roots are available in project mode, and how aggressively it surfaces selection shortcuts.",
       cls: "codex-workbench-settings-copy",
@@ -101,7 +97,7 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
       .setDesc("One directory per line. These repo roots become available in project mode and repo context packs.")
       .addTextArea((text) =>
         text
-          .setPlaceholder("/Users/you/project-a\n/Users/you/project-b")
+          .setPlaceholder("/path/to/project-a\n/path/to/project-b")
           .setValue(this.plugin.settings.projectContextPaths)
           .onChange(async (value) => {
             this.plugin.settings.projectContextPaths = value;
@@ -127,7 +123,7 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
       .setDesc("Optional bearer token for your endpoint.")
       .addText((text) => {
         text.inputEl.type = "password";
-        return text.setPlaceholder("sk-...")
+        return text.setPlaceholder("your-api-key")
           .setValue(this.plugin.settings.apiKey)
           .onChange(async (value) => {
             this.plugin.settings.apiKey = value.trim();
@@ -140,7 +136,7 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
       .setDesc("Model name sent to the endpoint.")
       .addText((text) =>
         text
-          .setPlaceholder("gpt-4.1-mini")
+          .setPlaceholder("your-model-name")
           .setValue(this.plugin.settings.model)
           .onChange(async (value) => {
             this.plugin.settings.model = value.trim();

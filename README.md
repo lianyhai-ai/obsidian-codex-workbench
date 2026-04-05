@@ -108,7 +108,7 @@ build/release/
 1. Update `manifest.json` version.
 2. Run `npm run version`.
 3. Run `npm run release:check`.
-4. Create a Git tag matching the release version, for example `0.1.1`.
+4. Create a Git tag matching the release version, for example `0.1.2`.
 5. Push the tag to GitHub.
 6. Upload or let GitHub Actions publish `manifest.json`, `main.js`, and `styles.css` from `build/release/`.
 7. Submit the initial plugin entry to `obsidianmd/obsidian-releases`.
@@ -219,7 +219,7 @@ build/release/
 2. 更新 `manifest.json` 版本号
 3. 执行 `npm run version`
 4. 执行 `npm run release:check`
-5. 打 Git tag，例如 `0.1.1`
+5. 打 Git tag，例如 `0.1.2`
 6. 通过 GitHub Release 发布 `manifest.json`、`main.js`、`styles.css`
 7. 首次版本再提交到 `obsidianmd/obsidian-releases`
 

@@ -118,7 +118,7 @@ class ContextPackModal extends Modal {
         : "Optional repo root.")
       .addText((text) =>
         text
-          .setPlaceholder("/Users/you/project")
+          .setPlaceholder("/path/to/project")
           .setValue(this.draft.repoPath ?? "")
           .onChange((value) => {
             this.draft.repoPath = value.trim() || null;
@@ -130,7 +130,7 @@ class ContextPackModal extends Modal {
       .setDesc("One vault-relative note path per line. These notes are always included when the pack is active.")
       .addTextArea((text) =>
         text
-          .setPlaceholder("Projects/Architecture/README.md\nNotes/System Design.md")
+          .setPlaceholder("projects/architecture/readme.md\nnotes/system-design.md")
           .setValue(this.draft.extraNotePaths.join("\n"))
           .onChange((value) => {
             this.draft.extraNotePaths = splitTextareaLines(value);
@@ -142,7 +142,7 @@ class ContextPackModal extends Modal {
       .setDesc("One repo file per line. Use relative paths from the repo root or absolute paths.")
       .addTextArea((text) =>
         text
-          .setPlaceholder("README.md\ndocs/overview.md\nsrc/architecture.ts")
+          .setPlaceholder("readme.md\ndocs/overview.md\nsrc/architecture.ts")
           .setValue(this.draft.extraRepoFiles.join("\n"))
           .onChange((value) => {
             this.draft.extraRepoFiles = splitTextareaLines(value);

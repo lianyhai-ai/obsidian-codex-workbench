@@ -785,7 +785,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
     }
   }
 
-  async insertLastReply(): Promise<void> {
+  insertLastReply(): void {
     if (!this.lastAssistantReply) {
       new Notice("There is no assistant reply to insert yet.");
       return;
@@ -813,7 +813,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
     return true;
   }
 
-  async replaceSelectionWithLastReply(): Promise<void> {
+  replaceSelectionWithLastReply(): void {
     if (!this.lastAssistantReply) {
       new Notice("There is no assistant reply to use yet.");
       return;
@@ -982,16 +982,16 @@ export default class CodexWorkbenchPlugin extends Plugin {
     this.addCommand({
       id: "insert-last-reply",
       name: "Insert last reply at cursor",
-      editorCallback: async () => {
-        await this.insertLastReply();
+      editorCallback: () => {
+        this.insertLastReply();
       },
     });
 
     this.addCommand({
       id: "replace-selection-with-last-reply",
       name: "Replace selection with last reply",
-      editorCallback: async () => {
-        await this.replaceSelectionWithLastReply();
+      editorCallback: () => {
+        this.replaceSelectionWithLastReply();
       },
     });
 
