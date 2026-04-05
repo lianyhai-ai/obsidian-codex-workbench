@@ -101,7 +101,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
       (leaf) => new CodexWorkbenchView(leaf, this),
     );
 
-    this.addRibbonIcon("bot", "Open Codex Workbench", () => {
+    this.addRibbonIcon("bot", "Open workbench", () => {
       void this.activateView();
     });
 
@@ -147,14 +147,14 @@ export default class CodexWorkbenchPlugin extends Plugin {
     });
   }
 
-  async onunload(): Promise<void> {
+  onunload(): void {
     if (this.draftSaveHandle !== null) {
       window.clearTimeout(this.draftSaveHandle);
       this.draftSaveHandle = null;
     }
 
-    await this.savePluginData();
-    await this.localCodexClient.dispose();
+    void this.savePluginData();
+    this.localCodexClient.dispose();
   }
 
   async loadPluginData(): Promise<void> {
@@ -237,7 +237,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
       if (existingLeaf.view instanceof CodexWorkbenchView) {
         existingLeaf.view.requestScrollToLatest();
       }
-      this.app.workspace.revealLeaf(existingLeaf);
+      void this.app.workspace.revealLeaf(existingLeaf);
       this.refreshViews();
       return;
     }
@@ -256,7 +256,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
     if (leaf.view instanceof CodexWorkbenchView) {
       leaf.view.requestScrollToLatest();
     }
-    this.app.workspace.revealLeaf(leaf);
+    void this.app.workspace.revealLeaf(leaf);
     this.refreshViews();
   }
 
@@ -647,11 +647,11 @@ export default class CodexWorkbenchPlugin extends Plugin {
   }
 
   async askSelectionFromActiveEditor(): Promise<void> {
-    const view = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!view) {
-      new Notice("Open a markdown note first.");
-      return;
-    }
+      const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+      if (!view) {
+        new Notice("Open a Markdown note first.");
+        return;
+      }
 
     const selection = view.editor.getSelection().trim();
     if (!selection) {
@@ -713,7 +713,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
             if (partialAnswer) {
               this.lastAssistantReply = partialAnswer;
             }
-            new Notice("Stopped the current Codex turn.");
+            new Notice("Stopped the current turn.");
             return {
               mode: "local-codex",
               answer: partialAnswer,
@@ -758,7 +758,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
 
   async interruptCurrentTurn(): Promise<boolean> {
     if (!this.supportsInterruptCurrentTurn()) {
-      new Notice("Stopping is only available for Local Codex sessions.");
+      new Notice("Stopping is only available in local sessions.");
       return false;
     }
 
@@ -767,7 +767,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
     }
 
     if (!this.localCodexClient.hasActiveTurn) {
-      new Notice("There is no active Codex turn to stop.");
+      new Notice("There is no active turn to stop.");
       return false;
     }
 
@@ -780,7 +780,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
       this.isInterrupting = false;
       this.refreshViews();
       const message = error instanceof Error ? error.message : "Unknown interrupt failure";
-      new Notice(`Could not stop the current Codex turn: ${message}`);
+      new Notice(`Could not stop the current turn: ${message}`);
       return false;
     }
   }
@@ -791,10 +791,10 @@ export default class CodexWorkbenchPlugin extends Plugin {
       return;
     }
 
-    await this.insertReplyText(this.lastAssistantReply);
+    this.insertReplyText(this.lastAssistantReply);
   }
 
-  async insertReplyText(reply: string): Promise<boolean> {
+  insertReplyText(reply: string): boolean {
     const content = reply.trim();
     if (!content) {
       new Notice("There is no assistant reply to insert yet.");
@@ -803,7 +803,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
 
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (!view) {
-      new Notice("Open a markdown note first.");
+      new Notice("Open a Markdown note first.");
       return false;
     }
 
@@ -819,10 +819,10 @@ export default class CodexWorkbenchPlugin extends Plugin {
       return;
     }
 
-    await this.replaceSelectionWithReplyText(this.lastAssistantReply);
+    this.replaceSelectionWithReplyText(this.lastAssistantReply);
   }
 
-  async replaceSelectionWithReplyText(reply: string): Promise<boolean> {
+  replaceSelectionWithReplyText(reply: string): boolean {
     const content = reply.trim();
     if (!content) {
       new Notice("There is no assistant reply to use yet.");
@@ -831,7 +831,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
 
     const view = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (!view) {
-      new Notice("Open a markdown note first.");
+      new Notice("Open a Markdown note first.");
       return false;
     }
 
@@ -904,7 +904,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
     }
 
     if (this.isBusy) {
-      new Notice("Wait for the current Codex turn to finish first.");
+      new Notice("Wait for the current turn to finish first.");
       return false;
     }
 
@@ -915,7 +915,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
 
     const anchorFile = this.getContextAnchorFile(turn.context);
     if (!anchorFile) {
-      new Notice("Open a markdown note first so the learning artifact has a home.");
+      new Notice("Open a Markdown note first so the learning artifact has a home.");
       return false;
     }
 
@@ -955,12 +955,12 @@ export default class CodexWorkbenchPlugin extends Plugin {
     this.pendingContext = null;
     await this.savePluginData();
     this.refreshViews();
-    new Notice("Started a fresh Codex session.");
+    new Notice("Started a fresh session.");
   }
 
   private addCommands(): void {
     this.addCommand({
-      id: "open-codex-workbench",
+      id: "open-workbench",
       name: "Open workbench",
       callback: () => {
         void this.activateView();
@@ -972,7 +972,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
       name: "Ask about selection",
       editorCallback: async (editor, view) => {
         if (!(view instanceof MarkdownView)) {
-          new Notice("Open a markdown editor first.");
+          new Notice("Open a Markdown editor first.");
           return;
         }
         await this.askSelectionFromActiveEditor();
@@ -1558,7 +1558,7 @@ export default class CodexWorkbenchPlugin extends Plugin {
         }
         return answer;
       } finally {
-        await client.dispose();
+        client.dispose();
       }
     }
 

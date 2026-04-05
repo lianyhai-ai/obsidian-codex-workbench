@@ -30,23 +30,23 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
     containerEl.empty();
 
     new Setting(containerEl)
-      .setName("Codex Workbench")
+      .setName("General")
       .setHeading();
 
     containerEl.createEl("p", {
-      text: "Configure how the plugin talks to your model endpoint, which repo roots are available in Project Mode, and how aggressively it surfaces selection shortcuts.",
+      text: "Configure how the plugin talks to your model endpoint, which repo roots are available in project mode, and how aggressively it surfaces selection shortcuts.",
       cls: "codex-workbench-settings-copy",
     });
 
     new Setting(containerEl)
-      .setName("Provider mode")
-      .setDesc("Choose the local Codex app-server backend, a mock response, an OpenAI-compatible endpoint, or a generic JSON endpoint.")
+      .setName("Provider")
+      .setDesc("Choose the local app-server backend, a mock response, a compatible endpoint, or a generic JSON endpoint.")
       .addDropdown((dropdown) =>
         dropdown
-          .addOption("local-codex", "Local Codex app-server")
+          .addOption("local-codex", "Local app-server")
           .addOption("mock", "Mock")
-          .addOption("openai-compatible", "OpenAI-compatible")
-          .addOption("generic-json", "Generic JSON")
+          .addOption("openai-compatible", "Compatible endpoint")
+          .addOption("generic-json", "JSON endpoint")
           .setValue(this.plugin.settings.providerMode)
           .onChange(async (value) => {
             this.plugin.settings.providerMode = value as CodexWorkbenchSettings["providerMode"];
@@ -55,8 +55,8 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
       );
 
     new Setting(containerEl)
-      .setName("Codex CLI path")
-      .setDesc("Used when Provider mode is Local Codex app-server.")
+      .setName("CLI path")
+      .setDesc("Used when the provider is the local app-server.")
       .addText((text) =>
         text
           .setPlaceholder("/usr/local/bin/codex")
@@ -69,7 +69,7 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Sandbox mode")
-      .setDesc("Controls whether local Codex stays read-only or can work directly in your vault workspace.")
+      .setDesc("Controls whether the local assistant stays read-only or can work directly in your vault workspace.")
       .addDropdown((dropdown) =>
         dropdown
           .addOption("workspace-write", "Workspace write")
@@ -83,7 +83,7 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Approval policy")
-      .setDesc("Controls when local Codex should stop and ask you before taking riskier actions.")
+      .setDesc("Controls when the local assistant should stop and ask before taking riskier actions.")
       .addDropdown((dropdown) =>
         dropdown
           .addOption("on-request", "On request")
@@ -98,7 +98,7 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Project context directories")
-      .setDesc("One directory per line. These repo roots become available in Project Mode and repo context packs.")
+      .setDesc("One directory per line. These repo roots become available in project mode and repo context packs.")
       .addTextArea((text) =>
         text
           .setPlaceholder("/Users/you/project-a\n/Users/you/project-b")
@@ -111,7 +111,7 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Endpoint URL")
-      .setDesc("Used for OpenAI-compatible and Generic JSON modes.")
+      .setDesc("Used for compatible and JSON endpoint modes.")
       .addText((text) =>
         text
           .setPlaceholder("https://your-gateway.example.com/v1/chat/completions")
@@ -150,10 +150,10 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Base instructions")
-      .setDesc("Used as the system prompt for HTTP providers and as the Codex thread instructions for the local app-server.")
+      .setDesc("Used as the system prompt for HTTP providers and as the thread instructions for the local app-server.")
       .addTextArea((text) =>
         text
-          .setPlaceholder("You are Codex inside Obsidian...")
+          .setPlaceholder("You are the assistant inside this side panel...")
           .setValue(this.plugin.settings.systemPrompt)
           .onChange(async (value) => {
             this.plugin.settings.systemPrompt = value;
@@ -175,7 +175,7 @@ export class CodexWorkbenchSettingTab extends PluginSettingTab {
 
     new Setting(containerEl)
       .setName("Show selection button")
-      .setDesc("Display a floating Ask Codex button when text is selected inside the editor.")
+      .setDesc("Display a floating ask button when text is selected inside the editor.")
       .addToggle((toggle) =>
         toggle
           .setValue(this.plugin.settings.showSelectionButton)

@@ -10,7 +10,7 @@ export class SelectionToolbarController {
     this.plugin = plugin;
     this.buttonEl = document.body.createEl("button", {
       cls: "codex-workbench-selection-button",
-      text: "Ask Codex",
+      text: "Ask about this",
     });
     this.buttonEl.hide();
     this.buttonEl.addEventListener("click", () => {

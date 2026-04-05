@@ -1,4 +1,4 @@
-import { Modal, Notice, Setting, type App } from "obsidian";
+import { Modal, Notice, type App } from "obsidian";
 
 export type ApprovalKind = "command" | "file-change" | "permissions";
 

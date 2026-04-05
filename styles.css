@@ -615,6 +615,7 @@
 
 .codex-workbench-composer {
   width: 100%;
+  height: var(--codex-workbench-composer-height, 78px);
   min-height: 60px;
   resize: none;
   padding: 1px 2px 0 2px;

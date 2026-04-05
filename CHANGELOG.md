@@ -12,6 +12,13 @@ The format is inspired by Keep a Changelog and uses semantic-style version tags 
 - GitHub workflows for CI and release packaging
 - Issue templates and contribution docs
 
+## [0.1.1] - 2026-04-05
+
+### Changed
+
+- Fixed Obsidian review bot findings around UI sentence case, deprecated keyboard handling, async signatures, and command IDs
+- Updated the release process to use exact version tags such as `0.1.1`
+
 ## [0.1.0] - 2026-04-04
 
 ### Added

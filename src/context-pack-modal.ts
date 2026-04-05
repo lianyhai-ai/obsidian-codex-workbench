@@ -38,11 +38,11 @@ class ContextPackModal extends Modal {
     contentEl.addClass("codex-workbench-context-pack-modal");
 
     contentEl.createEl("h2", {
-      text: this.options.isEditing ? "Edit Context Pack" : "New Context Pack",
+      text: this.options.isEditing ? "Edit context pack" : "New context pack",
     });
 
     contentEl.createEl("p", {
-      text: "Set the scope and explicit sources this pack should carry into future Codex turns.",
+      text: "Set the scope and explicit sources this pack should carry into future turns.",
       cls: "codex-workbench-settings-copy",
     });
 
@@ -86,10 +86,10 @@ class ContextPackModal extends Modal {
 
     new Setting(contentEl)
       .setName("Folder path")
-      .setDesc("Optional vault-relative folder path. Used when scope is Folder.")
+      .setDesc("Optional vault-relative folder path. Used when scope is folder.")
       .addText((text) =>
         text
-          .setPlaceholder("Projects/Architecture")
+          .setPlaceholder("Projects/architecture")
           .setValue(this.draft.folderPath ?? "")
           .onChange((value) => {
             this.draft.folderPath = value.trim() || null;
@@ -158,7 +158,7 @@ class ContextPackModal extends Modal {
     saveButton.addEventListener("click", () => {
       const nextName = this.draft.name.trim();
       if (!nextName) {
-        new Notice("Give the context pack a name first.");
+        new Notice("Name the context pack before saving.");
         return;
       }
 

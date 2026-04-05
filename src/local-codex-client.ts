@@ -6,7 +6,7 @@ import WebSocket, { type RawData } from "ws";
 import type { CodexWorkbenchSettings } from "./types";
 
 const CLIENT_NAME = "codex-workbench";
-const CLIENT_VERSION = "0.1.0";
+const CLIENT_VERSION = "0.1.1";
 const SOCKET_CONNECT_ATTEMPTS = 30;
 const SOCKET_CONNECT_DELAY_MS = 250;
 const REQUEST_TIMEOUT_MS = 90_000;
@@ -259,7 +259,7 @@ export class LocalCodexAppServerClient {
     }
   }
 
-  async dispose(): Promise<void> {
+  dispose(): void {
     this.isDisposing = true;
     this.rejectPendingRequests(new Error("Codex app-server client disposed."));
     this.rejectActiveTurn(new Error("Codex app-server client disposed."));
@@ -422,7 +422,7 @@ export class LocalCodexAppServerClient {
         const socket = await openWebSocket(url);
         this.socket = socket;
         socket.on("message", (data: RawData) => {
-          this.handleSocketMessage(String(data));
+          this.handleSocketMessage(readSocketMessage(data));
         });
         socket.on("close", () => {
           if (this.isDisposing) {
@@ -670,6 +670,28 @@ export class LocalCodexAppServerClient {
     this.activeTurn.reject(error);
     this.activeTurn = null;
   }
+}
+
+function readSocketMessage(data: RawData): string {
+  if (typeof data === "string") {
+    return data;
+  }
+
+  if (data instanceof Buffer) {
+    return data.toString("utf8");
+  }
+
+  if (data instanceof ArrayBuffer) {
+    return Buffer.from(data).toString("utf8");
+  }
+
+  if (Array.isArray(data)) {
+    return Buffer.concat(
+      data.map((chunk) => (chunk instanceof Buffer ? chunk : Buffer.from(chunk))),
+    ).toString("utf8");
+  }
+
+  return Buffer.from(data).toString("utf8");
 }
 
 async function findOpenPort(): Promise<number> {

@@ -54,25 +54,27 @@ export class CodexWorkbenchView extends ItemView {
   }
 
   getDisplayText(): string {
-    return "Codex Workbench";
+    return "Codex workbench";
   }
 
   getIcon(): string {
     return "bot";
   }
 
-  async onOpen(): Promise<void> {
+  onOpen(): Promise<void> {
     this.requestScrollToLatest();
     this.render();
+    return Promise.resolve();
   }
 
-  async onClose(): Promise<void> {
+  onClose(): Promise<void> {
     this.cancelFollowupScroll();
     this.cancelRecoveryScrolls();
     this.disposeRenderedTurns();
     this.emptyStateEl = null;
     this.loadingRowEl = null;
     this.contentEl.empty();
+    return Promise.resolve();
   }
 
   refresh(): void {
@@ -115,11 +117,11 @@ export class CodexWorkbenchView extends ItemView {
     const composerWrap = shell.createDiv({ cls: "codex-workbench-composer-wrap" });
     const composerTopline = composerWrap.createDiv({ cls: "codex-workbench-composer-topline" });
     composerTopline.createEl("span", {
-      text: "Codex",
+      text: "Assistant",
       cls: "codex-workbench-composer-label",
     });
     composerTopline.createEl("span", {
-      text: "Enter send, Shift+Enter newline, /learning-mode study",
+      text: "Press Enter to send, Shift+Enter for a new line, /learning-mode to study",
       cls: "codex-workbench-composer-hint",
     });
 
@@ -127,7 +129,7 @@ export class CodexWorkbenchView extends ItemView {
       cls: "codex-workbench-composer",
       attr: {
         rows: "1",
-        placeholder: "Ask Codex to explain, rewrite, plan, or study...",
+        placeholder: "Ask to explain, rewrite, plan, or study...",
       },
     });
     this.applyComposerValue(this.plugin.composerDraft, false);
@@ -141,8 +143,7 @@ export class CodexWorkbenchView extends ItemView {
     });
 
     this.composerEl.addEventListener("keydown", (event) => {
-      const nativeEvent = event as KeyboardEvent & { isComposing?: boolean; keyCode?: number };
-      if (nativeEvent.isComposing || this.isComposerComposing || nativeEvent.keyCode === 229) {
+      if (event.isComposing || this.isComposerComposing || event.key === "Process") {
         return;
       }
 
@@ -181,7 +182,7 @@ export class CodexWorkbenchView extends ItemView {
       });
       menu.addItem((item) => {
         item
-          .setTitle("Copy last")
+          .setTitle("Copy last reply")
           .setIcon("copy")
           .setDisabled(!hasLastReply)
           .onClick(() => {
@@ -190,7 +191,7 @@ export class CodexWorkbenchView extends ItemView {
       });
       menu.addItem((item) => {
         item
-          .setTitle("Insert last")
+          .setTitle("Insert last reply")
           .setIcon("corner-down-left")
           .setDisabled(!(hasLastReply && hasActiveEditor))
           .onClick(() => {
@@ -560,7 +561,7 @@ export class CodexWorkbenchView extends ItemView {
           });
           menu.addItem((item) => {
             item
-              .setTitle("Anki Q&A")
+              .setTitle("Anki cards")
               .setIcon("list-checks")
               .onClick(() => {
                 void this.plugin.createLearningArtifactFromTurn(turn.id, "qa-cards");
@@ -1059,9 +1060,13 @@ export class CodexWorkbenchView extends ItemView {
       return;
     }
 
-    this.composerEl.style.height = "0px";
+    this.composerEl.setCssProps({
+      "--codex-workbench-composer-height": "0px",
+    });
     const nextHeight = Math.min(Math.max(this.composerEl.scrollHeight, 78), 220);
-    this.composerEl.style.height = `${nextHeight}px`;
+    this.composerEl.setCssProps({
+      "--codex-workbench-composer-height": `${nextHeight}px`,
+    });
   }
 
   private isMessageListNearBottom(): boolean {
@@ -1117,7 +1122,7 @@ export class CodexWorkbenchView extends ItemView {
     }
 
     if (this.plugin.isBusy) {
-      new Notice("Wait for the current Codex turn to finish before sending the next one.");
+      new Notice("Wait for the current turn to finish before sending the next one.");
       return;
     }
 
